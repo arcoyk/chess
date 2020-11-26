@@ -14,9 +14,6 @@ function init_params() {
 function setup() {
     createCanvas(600, 600);
     background(100, 100, 100);
-    init_params();
-    init_bd();
-    init_pies();
 }
 
 function draw() {
@@ -26,6 +23,26 @@ function draw() {
     draw_bd();
     draw_pies();
     draw_cands();
+    draw_dums();
+}
+
+var dums = [];
+
+function init_dums() {
+    var kinds = ["Q", "R", "B", "N"];
+    for (var i in kinds) {
+        dum = {x: int(i), y: 10, kind: kinds[i], posi: posi};
+        dums.push(dum);
+    }
+}
+
+function draw_dums() {
+    for (var dum of dums) {
+        noStroke();
+        fill(255);
+        var posi = dum.posi();
+        text(dum.kind, posi.x, posi.y);
+    }
 }
 
 function focus_by_mouse(my_pies) {
@@ -57,33 +74,89 @@ function gameover() {
     return false;
 }
 
+function promotion(pie, kind) {
+    ({x: 7, y: 8, side: 0, kind:"N", name: "N2", move: move, get_cands: get_cands, posi: posi, take: take});
+    pie.kind = kind;
+    var n = {"P": 9, "K": 2, "Q": 2, "R": 3, "B": 3, "N": 3};
+    pie.name = kind + n[kind];
+}
+
+function promotion_by_mouse(promo) {
+
+}
+
+function promo_by_mouse(pie) {
+    if (!mouseIsPressed) return null;
+    for (var dum of dums) {
+        var posi = dum.posi();
+        if (near(mouseX, mouseY, posi.x, posi.y)) return dum.kind;
+    }
+}
+
+var state = "start"; // "hand", "judge", "dialog", "next";
 function turn() {
-    my_pies = pies.filter(pie => pie.side == side);
-    if (auto) {
-        focus = _.sample(my_pies);
-    } else {
-        focus = focus_by_mouse(my_pies);
-    }
-    if (!focus) return;
-    cands = focus.get_cands();
-    cands = rm_impossible(cands, focus);
-    if (cands) {
-        if (auto) {
-            hand = _.sample(cands);
-        } else {
-            hand = hand_by_mouse(cands)
-        }
-        if (!hand) return;
-        if (hand.pie != null) focus.take(hand.pie);
-        focus.move(hand.x, hand.y);
-        focus = null;
-        cands = [];
-        side = side == 1 ? 0 : 1;    
-    }
-    if (gameover()) {
+    if (state == "start") {
+        init_params();
         init_bd();
         init_pies();
+        init_dums();
+        state = "choice";
     }
+
+    if (state == "choice") {
+        my_pies = pies.filter(pie => pie.side == side);
+        if (auto) {
+            focus = _.sample(my_pies);
+        } else {
+            focus = focus_by_mouse(my_pies);
+        }
+        if (focus) state = "hand";
+    }
+
+    if (state == "hand") {
+        cands = focus.get_cands();
+        cands = rm_impossible(cands, focus);
+        if (cands) {
+            if (auto) {
+                hand = _.sample(cands);
+            } else {
+                hand = hand_by_mouse(cands)
+            }
+            if (!hand) return;
+            if (hand.pie != null) focus.take(hand.pie);
+            focus.move(hand.x, hand.y);
+            state = "judge"
+        }
+    }
+
+    if (state == "judge") {
+        if (gameover()) state = "start";
+        state = "dialog";
+    }
+
+    if (state == "dialog") {
+        // promotion
+        var last_line = [1, 8][focus.side];
+        if (focus.kind == "P" && last_line) {
+            var kind = null;
+            if (auto) {
+                kind = "Q"
+            } else {
+                kind = promo_by_mouse(focus);
+            }
+            if (!kind) return;
+            promotion(focus, kind);
+        }
+        state = "next";
+    }
+
+    if (state == "next") {
+        focus = null;
+        cands = [];
+        side = side == 1 ? 0 : 1;
+        state = "choice";
+    }
+
 }
 
 var kindc = {"P":P, "K": K, "Q": Q, "R": R, "B": B, "N": N};
@@ -155,39 +228,24 @@ function P(p) {
     rs = [];
     var cx = p.x;
     var cy = p.y;
-    if (p.side == 1) {
-        if (p.y == 2) {
-            // first step
-            rs.push({x: cx, y: cy + 1, posi: posi});
-            rs.push({x: cx, y: cy + 2, posi: posi});
-        } else {
-            front = {x: cx, y: cy + 1, posi: posi};
-            wingl = {x: cx + 1, y: cy + 1, posi: posi};
-            wingr = {x: cx - 1, y: cy + 1, posi: posi};
-            front_collide = collided_pie(front);
-            wingl_collide = collided_pie(wingl);
-            wingr_collide = collided_pie(wingr);
-            if (!front_collide) rs.push(front);
-            if (wingl_collide && wingl_collide.side != p.side) rs.push(wingl);
-            if (wingr_collide && wingr_collide.side != p.side) rs.push(wingr);
+    var factor = [-1, 1][p.side];
+    var first = [7, 2][p.side];
+    front1 = {x: p.x, y: p.y + 1 * factor, posi: posi};
+    front2 = {x: p.x, y: p.y + 2 * factor, posi: posi};
+    wingl = {x: p.x + 1, y: p.y + 1 * factor, posi: posi};
+    wingr = {x: p.x - 1, y: p.y + 1 * factor, posi: posi};
+    front1_collide = collided_pie(front1);
+    front2_collide = collided_pie(front2);
+    wingl_collide = collided_pie(wingl);
+    wingr_collide = collided_pie(wingr);
+    if (!front1_collide) {
+        rs.push(front1);
+        if (p.y == first && !front2_collide) {
+            rs.push(front2);
         }
     }
-    if (p.side == 0) {
-        if (p.y == 7) {
-            rs.push({x: cx, y: cy - 1, posi: posi});
-            rs.push({x: cx, y: cy - 2, posi: posi});
-        } else {
-            front = {x: cx, y: cy - 1, posi: posi};
-            wingl = {x: cx + 1, y: cy - 1, posi: posi};
-            wingr = {x: cx - 1, y: cy - 1, posi: posi};
-            front_collide = collided_pie(front);
-            wingl_collide = collided_pie(wingl);
-            wingr_collide = collided_pie(wingr);
-            if (!front_collide) rs.push(front);
-            if (wingl_collide && wingl_collide.side != p.side) rs.push(wingl);
-            if (wingr_collide && wingr_collide.side != p.side) rs.push(wingr);
-        }
-    }
+    if (wingl_collide && wingl_collide.side != p.side) rs.push(wingl);
+    if (wingr_collide && wingr_collide.side != p.side) rs.push(wingr);
     return rs;
 }
 
