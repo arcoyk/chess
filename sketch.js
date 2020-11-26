@@ -11,9 +11,19 @@ function init_params() {
     focus = null;
 }
 
+let imgs = {};
+function preload() {
+    for (var kind of ["P", "Q", "K", "B", "N", "R"]) {
+        for (var side of [0, 1]) {
+            imgs[kind + side] = loadImage(kind + side + ".png");
+        }
+    }
+}
+
 function setup() {
     createCanvas(600, 600);
     background(100, 100, 100);
+    imageMode(CENTER);
 }
 
 function draw() {
@@ -37,11 +47,13 @@ function init_dums() {
 }
 
 function draw_dums() {
+    if (state != "dialog") return;
     for (var dum of dums) {
         noStroke();
         fill(255);
         var posi = dum.posi();
         text(dum.kind, posi.x, posi.y);
+        show_pie(dum.kind, 1, posi.x, posi.y);
     }
 }
 
@@ -65,11 +77,13 @@ function hand_by_mouse(cands) {
 
 function gameover() {
     // no cands from my side
-    var my_pies = pies.filter(pie => pie.side == side);
-    my_cands = my_pies.reduce((a, _) => {return a.concat(_.get_cands())}, []);
-    if (my_cands.length == 0) return true;
-    // kind taken
-    if (my_pies.filter(pie => pie.kind == "K").length == 0) return true;
+    for (var side of [0, 1]) {
+        var my_pies = pies.filter(pie => pie.side == side);
+        my_cands = my_pies.reduce((a, _) => {return a.concat(_.get_cands())}, []);
+        if (my_cands.length == 0) return true;
+        // kind taken
+        if (my_pies.filter(pie => pie.kind == "K").length == 0) return true;
+    }
     // show must go on
     return false;
 }
@@ -79,10 +93,6 @@ function promotion(pie, kind) {
     pie.kind = kind;
     var n = {"P": 9, "K": 2, "Q": 2, "R": 3, "B": 3, "N": 3};
     pie.name = kind + n[kind];
-}
-
-function promotion_by_mouse(promo) {
-
 }
 
 function promo_by_mouse(pie) {
@@ -110,10 +120,7 @@ function turn() {
         } else {
             focus = focus_by_mouse(my_pies);
         }
-        if (focus) state = "hand";
-    }
-
-    if (state == "hand") {
+        if (!focus) return;
         cands = focus.get_cands();
         cands = rm_impossible(cands, focus);
         if (cands) {
@@ -123,21 +130,29 @@ function turn() {
                 hand = hand_by_mouse(cands)
             }
             if (!hand) return;
-            if (hand.pie != null) focus.take(hand.pie);
-            focus.move(hand.x, hand.y);
-            state = "judge"
+            state = "move";
         }
     }
 
+    if (state == "move") {
+        if (hand.pie != null) focus.take(hand.pie);
+        focus.move(hand.x, hand.y);
+        cands = [];
+        state = "judge"
+    }
+
     if (state == "judge") {
-        if (gameover()) state = "start";
-        state = "dialog";
+        if (gameover()) {
+            state = "start";
+        } else {
+            state = "dialog";
+        }
     }
 
     if (state == "dialog") {
         // promotion
         var last_line = [1, 8][focus.side];
-        if (focus.kind == "P" && last_line) {
+        if (focus.kind == "P" && focus.y == last_line) {
             var kind = null;
             if (auto) {
                 kind = "Q"
@@ -306,6 +321,7 @@ function init_bd() {
 
 function draw_bd() {
     stroke(0, 0, 0);
+    strokeWeight(1);
     fill(255, 255, 255);
     for (var b of bd) {
         rect(b.x * B_SIZE, b.y * B_SIZE, B_SIZE, B_SIZE);
@@ -324,7 +340,8 @@ function draw_pies() {
         noStroke();
         var posi = pie.posi();
         fill(pie.side == 0 ? 255 : 0, 0, 0);
-        text(pie.name, posi.x, posi.y);
+        // text(pie.name, posi.x, posi.y);
+        show_pie(pie.kind, pie.side, posi.x, posi.y);
         if (focus == pie) {
             noFill();
             stroke(0);
@@ -333,11 +350,16 @@ function draw_pies() {
     }
 }
 
+function show_pie(kind, side, x, y) {
+    image(imgs[kind + side], x, y, 50, 50);
+}
+
 function draw_cands() {
+    stroke(0);
     for (var cand of cands) {
-        fill(0);
+        noFill();
         var posi = cand.posi();
-        rect(posi.x, posi.y, 10, 10);
+        rect(posi.x - 15, posi.y - 15, 30, 30);
     }
 }
 
